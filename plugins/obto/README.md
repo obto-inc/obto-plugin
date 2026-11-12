@@ -1,0 +1,51 @@
+# OBTO Plugin for Claude
+
+Build, deploy, and operate apps on the [OBTO platform](https://app.obto.co) from Claude.
+
+## What's included
+
+**MCP server connection** — connects Claude to the OBTO platform (`obto` → `https://app.obto.co/ms/mcp`) with the full tool surface: app scaffolding, artifact deploys, line-level patching + slice reads, routes, DB introspection, logs, memory, search/fetch, media uploads, visual-debug screenshots, per-tenant MCP tool/resource/prompt publishing, and payment links. Sign-in is Google OAuth; a first-time sign-in provisions your workspace automatically.
+
+**`/obto:start` command** — begins a session by running `obto_whoami` and following its start rules, reading the app's decision page if it has one, and loading the matching skill.
+
+**Skills**
+
+| Skill | What it teaches Claude |
+|---|---|
+| `obto-build-loop` | The reliability-first app build workflow: stateless contract, scaffold (public/native) → vertical slice → review loop (`obto_review_change`, tests, done gate) → smoke gate (incl. `obto_capture_preview` visual check, preview-is-not-verification), grep→patch edits, verify-after-write |
+| `obto-deploy` | Choosing the write path (patch-in-place for edits vs. upsert vs. chunked upload vs. `from_url` deploy-by-reference), deployment order, sha256 verification, and post-deploy checks |
+| `obto-upload` | Getting a local media/binary file into the file store and back as a served URL: server-side URL fetch, the app's own upload page, chunked integrity-gated staging (fallback), and the domain/body rules |
+| `obto-memory` | Using `obto_remember`/`obto_recall` (Hindsight) effectively — scoping modes, keys, recall-before-work |
+| `obto-mcp-extend` | Publishing per-tenant MCP tools, resources, and prompts through the triad CRUD (`obto_create_mcp_tool` …) — handler and schema rules, required annotations, Zod v4 traps, and catalog-freshness discipline |
+| `obto-database` | The app's own Postgres database: read-only `obto_pg_query`, the reviewed schema-change flow (`obto_pg_check` → `obto_pg_propose` → `obto_pg_apply` after the owner's yes), one unit vs several, what the tool refuses today, and never touching the database URL or changing the schema outside OBTO |
+| `obto-troubleshooting` | Structured error envelopes, the common error codes, log-based and visual (`obto_capture_preview`) debugging, and why a preview URL isn't proof |
+| `obto-platform-boundary` | Why every OBTO workflow stays inside MCP — the symptom-to-MCP-action map instead of `kubectl`, pod recycles, shells, or a DNS console, and how to report what MCP genuinely cannot fix |
+| `obto-feedback` | Reviewer feedback left on the DevZone preview — how it reaches an agent (`obto_list_feedback` / `obto_get_feedback`, the `[obto-feedback]` nudge on map/graph/search results, the Agent Bridge thread `feedback-<app>`), how to read the annotated screenshot, and how a fix is closed out |
+
+## Setup
+
+1. Add the marketplace and install (the `obto-inc/platform` repository is itself the marketplace):
+
+   ```
+   /plugin marketplace add obto-inc/platform
+   /plugin install obto@obto
+   ```
+
+2. Start a new conversation. The first time Claude connects to the OBTO MCP server, you'll be prompted to sign in via Google OAuth in your browser — allow once and the connection is remembered (a first-time sign-in provisions your workspace automatically). No API token or environment variable is required.
+
+   To pick up a later release: `claude plugin marketplace update obto` then `claude plugin update obto@obto` — a marketplace clone never refreshes itself, and reinstalling an already-installed plugin is not an upgrade.
+
+   Authentication is handled by OAuth against your OBTO account; all tenancy and permission enforcement happens server-side against that identity — the plugin grants no access your account doesn't already have.
+
+3. Claude will call `obto_whoami` first and take it from there.
+
+## Usage
+
+Just describe what you want: "build a todo app on OBTO", "deploy this module to my app", "why is obto_db_query refusing my collection?", "remember that this app uses the X convention". The matching skill loads automatically.
+
+## Notes
+
+- The server is stateless (3.3.0+ contract): every call carries `appName` + `domain` explicitly. The skills handle this.
+- After a platform release, if tools are missing or look stale (`obto_whoami` shows `sessionStale: true`), reconnect the OBTO connector (Claude app: Settings > Connectors; Claude Code: `/mcp` > Reconnect) and start a new chat — an open chat keeps the tool list it started with.
+- **Connected but no tools?** Check the URL with `codex mcp list` / `claude mcp list`: it must be `https://app.obto.co/ms/mcp`. A hand-added entry named `obto` shadows the plugin's; run `codex mcp remove obto`, then `codex mcp login obto`.
+- **Sign-in errors:** 401 → accept the OAuth prompt in the browser. 400 "PKCE is mandatory" → update the client (current Claude and Codex send S256 PKCE). "Failed to check authorization requirements" → the sign-in page hiding an upstream 400; retry from the client, not by reloading. `invalid_redirect_uri` on registration → that `client_name` has another callback; use a distinct `client_name`.

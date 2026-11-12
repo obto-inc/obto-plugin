@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "obto": {
+      "type": "http",
+      "url": "https://app.obto.co/ms/mcp"
+    }
+  }
+}
